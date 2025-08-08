@@ -83,37 +83,42 @@ def plot_correction_ratios(crfs_arr, vmin=None, vmax=None):
 
         ax.add_feature(cfeature.OCEAN, zorder=1, edgecolor=None, lw=0, color="silver", alpha=0.5)
 
-        # Place the title on the left without "month = number"
-        ax.set_title(
-            month_names[month - 1], 
-            loc='left', fontsize=16, fontweight='bold'
-        )
+        # Place month title in upper right corner of each subplot for better readability
+        ax.text(0.95, 0.95, month_names[month - 1], 
+                transform=ax.transAxes, 
+                fontsize=16, fontweight='bold',
+                ha='right', va='top',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='none'))
 
-        # Add gridlines
+        # Add gridlines with improved positioning
         gl = ax.gridlines(draw_labels=True, x_inline=False, y_inline=False, 
                   linestyle='--', color='k', linewidth=0.75)
         gl.top_labels = False
         gl.right_labels = False
-        gl.xlabel_style = {'fontsize': 16, 'fontweight': 'bold'}
-        gl.ylabel_style = {'fontsize': 16, 'fontweight': 'bold'}
+        gl.bottom_labels = True
+        gl.left_labels = True
+        gl.xlabel_style = {'fontsize': 12, 'fontweight': 'normal'}
+        gl.ylabel_style = {'fontsize': 12, 'fontweight': 'normal'}
+        gl.xpadding = 10
+        gl.ypadding = 10
 
         axes.append(ax)
 
-        # Add a dedicated axis for the colorbar
-        cbar_ax = fig.add_axes([0.15, 0.05, 0.7, 0.02])  # [left, bottom, width, height]
-        cbar = fig.colorbar(
+    # Add a dedicated axis for the colorbar (move outside the loop)
+    cbar_ax = fig.add_axes([0.15, 0.05, 0.7, 0.02])  # [left, bottom, width, height]
+    cbar = fig.colorbar(
         ScalarMappable(norm=norm, cmap=newcmap),
         cax=cbar_ax, orientation='horizontal', extend='max'
-        )
-        cbar.ax.tick_params(labelsize=18, labelrotation=0, width=1, length=5, direction='out')
+    )
+    cbar.ax.tick_params(labelsize=16, labelrotation=0, width=1, length=5, direction='out')
 
-        # Round colorbar tick labels to 1 decimal place
-        ticks = cbar.get_ticks()
-        cbar.ax.set_xticks(ticks)
-        cbar.ax.set_xticklabels([f"{tick:.1f}" for tick in ticks])
+    # Round colorbar tick labels to 1 decimal place
+    ticks = cbar.get_ticks()
+    cbar.ax.set_xticks(ticks)
+    cbar.ax.set_xticklabels([f"{tick:.1f}" for tick in ticks])
 
-        # Adjust layout
-        plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space for the colorbar
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space for the colorbar
 
 #%% Floating variables
 
