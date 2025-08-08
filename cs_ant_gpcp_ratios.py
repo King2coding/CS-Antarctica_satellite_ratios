@@ -248,6 +248,68 @@ plt.tight_layout()
 plt.savefig(os.path.join(path_to_put_plots, f'GPCP_ratios_single_{cde_run_dte}.png'), dpi=300)
 plt.show()
 
+# apply zonal cosine to target and reference
+# Apply zonal cosine to each of the 12 monthly maps
+gpcp_zon = [
+    get_zonal(
+        gpcp_ant_monthly_clim.sel(month=month), 
+        new_mask_, 
+        gpcp_ant_monthly_clim.latitude.values, 
+        axis=(0, 1)
+    ) 
+    for month in range(1, 13)
+]
+
+cs_ant_zon = [
+    get_zonal(
+        cs_ant_month_clim_aligned.sel(month=month), 
+        new_mask_, 
+        cs_ant_month_clim_aligned.latitude.values, 
+        axis=(0, 1)
+    ) 
+    for month in range(1, 13)
+]
+
+# calculate ration and plot bar
+crfs_arr_single_zon = [
+    {
+        'month': month,
+        'crf': (cs_ant_zon[month - 1].mean().item() / gpcp_zon[month - 1].mean().item())
+    }
+    for month in range(1, 13)
+]
+
+# Convert the list of dictionaries to a DataFrame
+crfs_arr_single_zon = pd.DataFrame(crfs_arr_single_zon)
+
+# make a bar plot of the single value correction ratios
+# Update matplotlib parameters for improved aesthetics
+mpl.rcParams['font.family'] = 'serif'
+mpl.rcParams['font.serif'] = ['Times New Roman']
+mpl.rcParams['font.weight'] = 'bold'
+mpl.rcParams['axes.labelweight'] = 'bold'
+mpl.rcParams['axes.titleweight'] = 'bold'
+mpl.rcParams['xtick.labelsize'] = 18
+mpl.rcParams['ytick.labelsize'] = 18
+mpl.rcParams['axes.titlesize'] = 18
+mpl.rcParams['axes.labelsize'] = 18
+
+# Create the bar plot with updated styles
+plt.figure(figsize=(10, 6))
+plt.bar(crfs_arr_single_zon['month'], crfs_arr_single_zon['crf'], color='skyblue')
+plt.xticks(crfs_arr_single_zon['month'], 
+           ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], 
+           fontsize=18, fontweight='bold', family='Times New Roman')
+plt.xlabel('Month', fontsize=18, fontweight='bold', family='Times New Roman')
+plt.ylabel('Correction Ratio', fontsize=18, fontweight='bold', family='Times New Roman')
+plt.title('Monthly Correction Ratios for GPCP Precipitation Products', fontsize=18, fontweight='bold', family='Times New Roman')
+plt.ylim(0, 1.2)  # Adjust y-axis scale to match the previous plots
+plt.grid(axis='y')
+plt.tight_layout()
+
+# Save the plot
+plt.savefig(os.path.join(path_to_put_plots, f'GPCP_ratios_single_zon_{cde_run_dte}.png'), dpi=300)
+plt.show()
 
 #%% Reza method
 from scipy.ndimage import gaussian_filter
