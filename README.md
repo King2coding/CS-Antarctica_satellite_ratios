@@ -1,10 +1,12 @@
-# Antarctica GPCP Precipitation Correction
+# CS-Antarctica GPCP Precipitation Correction
 
-A Python package for computing correction ratios for GPCP precipitation products over Antarctica using CloudSat-Antarctica climatology data.
+A comprehensive Python package for computing correction ratios for GPCP precipitation products over Antarctica using CloudSat-Antarctica climatology data.
 
 ## Overview
 
 This project computes correction ratios for Global Precipitation Climatology Project (GPCP) precipitation products specifically tailored for Antarctica's land regions. The correction process leverages CloudSat-Antarctica climatology data (2007-2010) to improve the accuracy of GPCP precipitation estimates over Antarctica.
+
+**Main Script**: `cs_ant_gpcp_ratios.py` - The primary working script with improved plotting functionality
 
 ## Features
 

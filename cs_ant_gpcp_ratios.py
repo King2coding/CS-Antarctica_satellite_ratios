@@ -83,22 +83,19 @@ def plot_correction_ratios(crfs_arr, vmin=None, vmax=None):
 
         ax.add_feature(cfeature.OCEAN, zorder=1, edgecolor=None, lw=0, color="silver", alpha=0.5)
 
-        # Place month title in upper right corner of each subplot
-        ax.text(0.95, 0.95, month_names[month - 1], 
-                transform=ax.transAxes, 
-                fontsize=16, fontweight='bold',
-                ha='right', va='top',
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='none'))
+        # Place the title on the left without "month = number"
+        ax.set_title(
+            month_names[month - 1], 
+            loc='left', fontsize=16, fontweight='bold'
+        )
 
         # Add gridlines
         gl = ax.gridlines(draw_labels=True, x_inline=False, y_inline=False, 
                   linestyle='--', color='k', linewidth=0.75)
         gl.top_labels = False
         gl.right_labels = False
-        gl.xlabel_style = {'fontsize': 12, 'fontweight': 'normal'}
-        gl.ylabel_style = {'fontsize': 12, 'fontweight': 'normal'}
-        gl.xpadding = 10
-        gl.ypadding = 10
+        gl.xlabel_style = {'fontsize': 16, 'fontweight': 'bold'}
+        gl.ylabel_style = {'fontsize': 16, 'fontweight': 'bold'}
 
         axes.append(ax)
 
@@ -108,7 +105,7 @@ def plot_correction_ratios(crfs_arr, vmin=None, vmax=None):
         ScalarMappable(norm=norm, cmap=newcmap),
         cax=cbar_ax, orientation='horizontal', extend='max'
         )
-        cbar.ax.tick_params(labelsize=16, labelrotation=0, width=1, length=5, direction='out')
+        cbar.ax.tick_params(labelsize=18, labelrotation=0, width=1, length=5, direction='out')
 
         # Round colorbar tick labels to 1 decimal place
         ticks = cbar.get_ticks()
