@@ -15,6 +15,9 @@ from matplotlib.cm import ScalarMappable
 from matplotlib import gridspec
 import matplotlib as mpl
 
+from scipy.ndimage import gaussian_filter
+from scipy.signal import convolve2d
+
 #%%
 # global variables
 
@@ -151,6 +154,38 @@ def compute_monthly_ratios(reference, target):
         ],
         dim="month",
     ).assign_coords(month=list(range(1, 13)))
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+def cf_calculator(reference, target, mask, quantile=1 - 1e-6):
+    product_land = np.where(mask, target, np.nan)
+    q99 = np.nanquantile(product_land, quantile)
+    new_product = np.where(product_land > q99, q99, target)
+    new_product = np.where(~mask, target, new_product)
+    product_smoothed = apply_filter(new_product)
+
+    return reference / product_smoothed
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+def apply_filter(
+    array, method="convolution", sigma=1.4, kernel=np.ones((5, 5))
+):
+    if method == "gaussian":
+        new_array = gaussian_filter(array, sigma=(sigma, sigma), order=0)
+    elif method == "convolution":
+        new_array = convolve2d(array, kernel, boundary="symm", mode="same")
+        new_array = new_array / kernel.sum()
+
+    return new_array
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def get_zonal(spatial_product, mask, y, axis=(0, 1)):
+    cosines = np.cos(np.radians(y))[:, np.newaxis]  # Broadcast to match mask shape
+    cosines = np.where(mask, cosines, 0)
+    weights = cosines / np.nansum(cosines)
+
+    return np.nansum(weights * spatial_product, axis=axis)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
