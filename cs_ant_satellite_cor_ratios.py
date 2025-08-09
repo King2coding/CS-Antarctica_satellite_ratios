@@ -13,6 +13,9 @@ from utils import *
 cs_ant_month_clim_path = r'/ra1/pubdat/AVHRR_CloudSat_proj/CS_Antartica_analysis_kkk/CS-Antarctica_maps'
 gpcp_v3pt3_data_path = r'/ra1/pubdat/Satellite_eval_over_Oceans/data/GPCP/GPCP_v3_pnt_3_monthly'
 gpcp_v3pt2_data_path = r'/ra1/pubdat/Satellite_eval_over_Oceans/data/GPCP/GPCP_v3_pnt2_monthly'
+imerg_v7_data_path = r'/ra1/pubdat/AVHRR_CloudSat_proj/IMERG/IMERGV7_monthly'
+path_to_put_ratio_maps = r'/home/kkumah/Projects/CS-Antarctica_satellite_ratios/ratio_maps'
+path_to_put_ratio_dfs = r'/home/kkumah/Projects/CS-Antarctica_satellite_ratios/ratio_dfs'
 path_to_put_plots = r'/home/kkumah/Projects/CS-Antarctica_satellite_ratios/GPCP_ratios/plots'
 
 #%% Load the data
@@ -48,29 +51,8 @@ gpcp_v3pt3_monthly_clim = gpcp_v3pt3_data['sat_gauge_precip'].groupby('time.mont
 
 # Subset the data over Antarctica
 gpcp_v3pt3_ant_monthly_clim = gpcp_v3pt3_monthly_clim.isel(latitude=slice(-60, None)).where(new_mask_ == 1)
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# Plot the monthly climatology data
-plot_correction_ratios(gpcp_v3pt3_ant_monthly_clim, vmin=0, vmax=1.5)
-svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt3_ratios_{cde_run_dte}.png')
-plt.savefig(svnme, dpi=300)
-gc.collect()
-
-# Calculate monthly climatology from GPCP v3.2 data
-gpcp_v3pt2_monthly_clim = gpcp_v3pt2_data['sat_gauge_precip'].groupby('time.month').mean(dim='time').compute()
-
-# Subset the data over Antarctica
-gpcp_v3pt2_ant_monthly_clim = gpcp_v3pt2_monthly_clim.isel(latitude=slice(-60, None)).where(new_mask_ == 1)
-
-# Plot the monthly climatology data
-plot_correction_ratios(gpcp_v3pt2_ant_monthly_clim, vmin=0, vmax=1.5)
-svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt2_ratios_{cde_run_dte}.png')
-plt.savefig(svnme, dpi=300)
-gc.collect()
-
-#%% Calculate correction ratios
-# Compute correction ratios for each month pair
-# Perform the division lazily using Dask
-# Ensure the dimensions align correctly before division
 cs_ant_month_clim_aligned = cs_ant_month_clim.rename({'time': 'month'})
 
 # Ensure latitude and longitude dimensions match
@@ -82,52 +64,169 @@ cs_ant_month_clim_aligned = cs_ant_month_clim_aligned.interp(
 # plot and save the monthly climatology data
 
 plot_correction_ratios(cs_ant_month_clim_aligned, vmin=0, vmax=1.5)
+svnme = os.path.join(path_to_put_plots, f'CS_Antarctica_monthly_clim_{cde_run_dte}.png')
+plt.savefig(svnme, dpi=500)
+gc.collect()
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# Plot the monthly climatology data
+plot_correction_ratios(gpcp_v3pt3_ant_monthly_clim, vmin=0, vmax=1.5)
+svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt3_ratios_{cde_run_dte}.png')
+plt.savefig(svnme, dpi=500)
+gc.collect()
+
+# Calculate monthly climatology from GPCP v3.2 data
+gpcp_v3pt2_monthly_clim = gpcp_v3pt2_data['sat_gauge_precip'].groupby('time.month').mean(dim='time').compute()
+
+# Subset the data over Antarctica
+gpcp_v3pt2_ant_monthly_clim = gpcp_v3pt2_monthly_clim.isel(latitude=slice(-60, None)).where(new_mask_ == 1)
+
+# Plot the monthly climatology data
+plot_correction_ratios(gpcp_v3pt2_ant_monthly_clim, vmin=0, vmax=1.5)
+svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt2_ratios_{cde_run_dte}.png')
+plt.savefig(svnme, dpi=500)
+gc.collect()
+
+#%% Calculate correction ratios
+# Compute correction ratios for each month pair
+# Perform the division lazily using Dask
+# Ensure the dimensions align correctly before division
 
 # Compute correction ratios for GPCP v3.3 data
-gpcp_v3pt3_ratios = compute_monthly_ratios(cs_ant_month_clim_aligned, gpcp_v3pt3_ant_monthly_clim)
+# gpcp_v3pt3_ratios = compute_monthly_ratios(cs_ant_month_clim_aligned, gpcp_v3pt3_ant_monthly_clim)
+# Apply quantile-based outlier removal/correction 
+# Apply spatial smoothing
+gpcp_v3pt3_ratios = xr.concat(
+    [
+        xr.DataArray(
+            cf_calculator(
+                cs_ant_month_clim_aligned.sel(month=month).values,
+                gpcp_v3pt3_ant_monthly_clim.sel(month=month).values,
+                new_mask_,
+            ),
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": gpcp_v3pt3_ant_monthly_clim.latitude,
+                "longitude": gpcp_v3pt3_ant_monthly_clim.longitude,
+                "month": month,
+            },
+        )
+        for month in range(1, 13)
+    ],
+    dim="month",
+)
+gpcp_v3pt3_ratios = gpcp_v3pt3_ratios.assign_coords(month=list(range(1, 13)))
+# save the correction ratios to a netCDF file
+gpcp_v3pt3_ratios.to_netcdf(os.path.join(path_to_put_ratio_maps, f'gpcp_v3pt3_ratios_{cde_run_dte}.nc'))
+
 # Plot the correction ratios for GPCP v3.3 data
 
-svnme = os.path.join(path_to_put_plots, f'GPCP_ratios_{cde_run_dte}.png')
+svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt3_ratios_{cde_run_dte}.png')
 plot_correction_ratios(gpcp_v3pt3_ratios)
-plt.savefig(svnme, dpi=300)
+plt.savefig(svnme, dpi=500)
 gc.collect()
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # Compute correction ratios for GPCP v3.2 data
-gpcp_v3pt2_ratios = compute_monthly_ratios(cs_ant_month_clim_aligned, gpcp_v3pt2_ant_monthly_clim)
-# Plot the correction ratios for GPCP v3.2 data
-svnme = os.path.join(path_to_put_plots, f'GPCP_ratios_{cde_run_dte}.png')
-plot_correction_ratios(gpcp_v3pt2_ratios)
-plt.savefig(svnme, dpi=300)
-gc.collect()
+# gpcp_v3pt2_ratios = compute_monthly_ratios(cs_ant_month_clim_aligned, gpcp_v3pt2_ant_monthly_clim)
+gpcp_v3pt2_ratios = xr.concat(
+    [
+        xr.DataArray(
+            cf_calculator(
+                cs_ant_month_clim_aligned.sel(month=month).values,
+                gpcp_v3pt2_ant_monthly_clim.sel(month=month).values,
+                new_mask_,
+            ),
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": gpcp_v3pt2_ant_monthly_clim.latitude,
+                "longitude": gpcp_v3pt2_ant_monthly_clim.longitude,
+                "month": month,
+            },
+        )
+        for month in range(1, 13)
+    ],
+    dim="month",
+)
+gpcp_v3pt2_ratios = gpcp_v3pt2_ratios.assign_coords(month=list(range(1, 13)))
+# save the correction ratios to a netCDF file
+gpcp_v3pt2_ratios.to_netcdf(os.path.join(path_to_put_ratio_maps, f'gpcp_v3pt2_ratios_{cde_run_dte}.nc'))
 
+# Plot the correction ratios for GPCP v3.2 data
+svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt2_ratios_{cde_run_dte}.png')
+plot_correction_ratios(gpcp_v3pt2_ratios)
+plt.savefig(svnme, dpi=500)
+gc.collect()
 
 # %% calculate single value correction ratios
 # Calculate single value correction ratios and store them in a DataFrame
-
-crfs_arr_single_ = [
-    {
-        'month': month,
-        'crf': crfs_arr.sel(month=month).mean(dim=['latitude', 'longitude'], skipna=True).item()
-    }
+# First we need to Apply zonal cosine weights to each of the 12 monthly maps
+gpcp_v3pt3_zonal_weighted = [
+    get_zonal(
+        gpcp_v3pt3_ant_monthly_clim.sel(month=month), 
+        new_mask_, 
+        gpcp_v3pt3_ant_monthly_clim.latitude.values, 
+        axis=(0, 1)
+    ) 
     for month in range(1, 13)
 ]
-# Convert the list of dictionaries to a DataFrame
-crfs_arr_single_ = pd.DataFrame(crfs_arr_single_)
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+gpcp_v3pt2_zonal_weighted = [
+    get_zonal(
+        gpcp_v3pt2_ant_monthly_clim.sel(month=month), 
+        new_mask_, 
+        gpcp_v3pt2_ant_monthly_clim.latitude.values, 
+        axis=(0, 1)
+    ) 
+    for month in range(1, 13)
+]
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-crfs_arr_single = [
+cs_ant_zon = [
+    get_zonal(
+        cs_ant_month_clim_aligned.sel(month=month), 
+        new_mask_, 
+        cs_ant_month_clim_aligned.latitude.values, 
+        axis=(0, 1)
+    ) 
+    for month in range(1, 13)
+]
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# now compute the single value correction ratios and convert to DataFrame
+
+gpcp_v3pt3_crfs_arr_single = [
     {
         'month': month,
         'crf': (cs_ant_month_clim_aligned.sel(month=month).mean().item() /
-                gpcp_ant_monthly_clim.sel(month=month).mean().item())
+                gpcp_v3pt3_ant_monthly_clim.sel(month=month).mean().item())
     }
     for month in range(1, 13)
 ]
 
 # Convert the list of dictionaries to a DataFrame
-crfs_arr_single = pd.DataFrame(crfs_arr_single)
+gpcp_v3pt3_crfs_arr_single = pd.DataFrame(gpcp_v3pt3_crfs_arr_single)
+# save the single value correction ratios to a csv file
+gpcp_v3pt3_crfs_arr_single.to_csv(os.path.join(path_to_put_ratio_dfs, f'gpcp_v3pt3_crfs_{cde_run_dte}.csv'), index=False)
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# make a bar plot of the single value correction ratios
+gpcp_v3pt2_crfs_arr_single = [
+    {
+        'month': month,
+        'crf': (cs_ant_month_clim_aligned.sel(month=month).mean().item() /
+                gpcp_v3pt2_ant_monthly_clim.sel(month=month).mean().item())
+    }
+    for month in range(1, 13)
+]
+
+# Convert the list of dictionaries to a DataFrame
+gpcp_v3pt2_crfs_arr_single = pd.DataFrame(gpcp_v3pt2_crfs_arr_single)
+# save the single value correction ratios to a csv file
+gpcp_v3pt2_crfs_arr_single.to_csv(os.path.join(path_to_put_ratio_dfs, f'gpcp_v3pt2_crfs_{cde_run_dte}.csv'), index=False)
+
+#%% Do bar plot comparion of the single value correction ratios for diff products
+
 # Update matplotlib parameters for improved aesthetics
 mpl.rcParams['font.family'] = 'serif'
 mpl.rcParams['font.serif'] = ['Times New Roman']
@@ -139,52 +238,9 @@ mpl.rcParams['ytick.labelsize'] = 18
 mpl.rcParams['axes.titlesize'] = 18
 mpl.rcParams['axes.labelsize'] = 18
 
-# Create the bar plot with updated styles
-plt.figure(figsize=(10, 6))
-plt.bar(crfs_arr_single['month'], crfs_arr_single['crf'], color='skyblue')
-plt.xticks(crfs_arr_single['month'], 
-           ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], 
-           fontsize=18, fontweight='bold', family='Times New Roman')
-plt.xlabel('Month', fontsize=18, fontweight='bold', family='Times New Roman')
-plt.ylabel('Correction Ratio', fontsize=18, fontweight='bold', family='Times New Roman')
-plt.title('Monthly Correction Ratios for GPCP Precipitation Products', fontsize=18, fontweight='bold', family='Times New Roman')
-plt.grid(axis='y')
-plt.tight_layout()
+#%%
 
-# Save the plot
-plt.savefig(os.path.join(path_to_put_plots, f'GPCP_ratios_single_{cde_run_dte}.png'), dpi=300)
-plt.show()
 
-# apply zonal cosine to target and reference
-# Apply zonal cosine to each of the 12 monthly maps
-gpcp_zon = [
-    get_zonal(
-        gpcp_ant_monthly_clim.sel(month=month), 
-        new_mask_, 
-        gpcp_ant_monthly_clim.latitude.values, 
-        axis=(0, 1)
-    ) 
-    for month in range(1, 13)
-]
-
-cs_ant_zon = [
-    get_zonal(
-        cs_ant_month_clim_aligned.sel(month=month), 
-        new_mask_, 
-        cs_ant_month_clim_aligned.latitude.values, 
-        axis=(0, 1)
-    ) 
-    for month in range(1, 13)
-]
-
-# calculate ration and plot bar
-crfs_arr_single_zon = [
-    {
-        'month': month,
-        'crf': (cs_ant_zon[month - 1].mean().item() / gpcp_zon[month - 1].mean().item())
-    }
-    for month in range(1, 13)
-]
 
 # Convert the list of dictionaries to a DataFrame
 crfs_arr_single_zon = pd.DataFrame(crfs_arr_single_zon)
@@ -219,28 +275,7 @@ plt.savefig(os.path.join(path_to_put_plots, f'GPCP_ratios_single_zon_{cde_run_dt
 plt.show()
 
 #%% Reza method
-from scipy.ndimage import gaussian_filter
-from scipy.signal import convolve2d
 
-def cf_calculator(reference, target, mask, quantile=1 - 1e-6):
-    product_land = np.where(mask, target, np.nan)
-    q99 = np.nanquantile(product_land, quantile)
-    new_product = np.where(product_land > q99, q99, target)
-    new_product = np.where(~mask, target, new_product)
-    product_smoothed = apply_filter(new_product)
-
-    return reference / product_smoothed
-
-def apply_filter(
-    array, method="convolution", sigma=1.4, kernel=np.ones((5, 5))
-):
-    if method == "gaussian":
-        new_array = gaussian_filter(array, sigma=(sigma, sigma), order=0)
-    elif method == "convolution":
-        new_array = convolve2d(array, kernel, boundary="symm", mode="same")
-        new_array = new_array / kernel.sum()
-
-    return new_array
 
 CAP = 3
 
@@ -250,14 +285,6 @@ def apply_cap(array, minimum=1 / CAP, maximum=CAP):
     temp = np.where(temp < minimum, minimum, temp)
 
     return temp
-
-
-def get_zonal(spatial_product, mask, y, axis=(0, 1)):
-    cosines = np.cos(np.radians(y))[:, np.newaxis]  # Broadcast to match mask shape
-    cosines = np.where(mask, cosines, 0)
-    weights = cosines / np.nansum(cosines)
-
-    return np.nansum(weights * spatial_product, axis=axis)
 
 
 def cf_smoother(reference, target, cf, mask, y):
@@ -277,27 +304,6 @@ def cf_smoother(reference, target, cf, mask, y):
     return cf_capped
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Calculate correction factors using the Reza method
-crfs_arr_reza = xr.concat(
-    [
-        xr.DataArray(
-            cf_calculator(
-                cs_ant_month_clim_aligned.sel(month=month).values,
-                gpcp_ant_monthly_clim.sel(month=month).values,
-                new_mask_,
-            ),
-            dims=["latitude", "longitude"],
-            coords={
-                "latitude": gpcp_ant_monthly_clim.latitude,
-                "longitude": gpcp_ant_monthly_clim.longitude,
-                "month": month,
-            },
-        )
-        for month in range(1, 13)
-    ],
-    dim="month",
-)
-crfs_arr_reza = crfs_arr_reza.assign_coords(month=list(range(1, 13)))
 
 # apply the smoothing and zonal averaging
 crfs_arr_reza_smoothed = xr.concat(
