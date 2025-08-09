@@ -19,32 +19,44 @@ path_to_put_ratio_dfs = r'/home/kkumah/Projects/CS-Antarctica_satellite_ratios/r
 path_to_put_plots = r'/home/kkumah/Projects/CS-Antarctica_satellite_ratios/GPCP_ratios/plots'
 
 #%% Load the data
-gpcp_v3pt3_files_2007_2010 = [
+gpcp_v3pt3_files_2007_2010 = sorted([
     os.path.join(gpcp_v3pt3_data_path, f) 
     for f in os.listdir(gpcp_v3pt3_data_path) 
     if f.startswith('GPCPMON_L3') and f.split('_')[2][:4] in ['2007', '2008', '2009', '2010'] \
     and f.endswith('.nc4')
-]
+])
 
 gpcp_v3pt3_data = xr.open_mfdataset(gpcp_v3pt3_files_2007_2010, combine='by_coords', engine='netcdf4')
 gpcp_v3pt3_data = ds_swaplon(gpcp_v3pt3_data)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-gpcp_v3pt2_files_2007_2010 = [
+gpcp_v3pt2_files_2007_2010 = sorted([
     os.path.join(gpcp_v3pt2_data_path, f) 
     for f in os.listdir(gpcp_v3pt2_data_path) 
     if f.startswith('GPCPMON_L3') and f.split('_')[2][:4] in ['2007', '2008', '2009', '2010'] \
     and f.endswith('.nc4')
-]
+])
 gpcp_v3pt2_data = xr.open_mfdataset(gpcp_v3pt2_files_2007_2010, combine='by_coords', engine='netcdf4')
 gpcp_v3pt2_data = ds_swaplon(gpcp_v3pt2_data)
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+imerg_v7_files_2007_2010 = sorted([
+    os.path.join(imerg_v7_data_path, f) 
+    for f in os.listdir(imerg_v7_data_path) 
+    if f.startswith('3B-MO.MS.MRG.3IMERG') and f.split('.')[4][:4] in ['2007', '2008', '2009', '2010'] \
+    and f.endswith('.HDF5')
+])
+# imerg_v7_data = xr.open_mfdataset(imerg_v7_files_2007_2010, combine='by_coords', engine='netcdf4')
+# imerg_v7_data = ds_swaplon(imerg_v7_data)
+imerg_v7_data =  process_precip_dat(imerg_v7_files_2007_2010, img_elem, 'yes')
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 cs_ant_mnth_clim_filenme = os.path.join(cs_ant_month_clim_path, 'CS-Antarctica_monthly_climatology_2007-2010.nc') 
 cs_ant_month_clim = xr.open_dataarray(cs_ant_mnth_clim_filenme, engine='netcdf4')
 cs_ant_month_clim = cs_ant_month_clim.where(new_mask_ == 1)
 
+gc.collect()
 #%%
 # Calculate monthly climatology from GPCP data
 gpcp_v3pt3_monthly_clim = gpcp_v3pt3_data['sat_gauge_precip'].groupby('time.month').mean(dim='time').compute()
@@ -71,7 +83,7 @@ gc.collect()
 
 # Plot the monthly climatology data
 plot_correction_ratios(gpcp_v3pt3_ant_monthly_clim, vmin=0, vmax=1.5)
-svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt3_ratios_{cde_run_dte}.png')
+svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt3_monthly_clim_{cde_run_dte}.png')
 plt.savefig(svnme, dpi=500)
 gc.collect()
 
@@ -82,8 +94,20 @@ gpcp_v3pt2_monthly_clim = gpcp_v3pt2_data['sat_gauge_precip'].groupby('time.mont
 gpcp_v3pt2_ant_monthly_clim = gpcp_v3pt2_monthly_clim.isel(latitude=slice(-60, None)).where(new_mask_ == 1)
 
 # Plot the monthly climatology data
-plot_correction_ratios(gpcp_v3pt2_ant_monthly_clim, vmin=0, vmax=1.5)
-svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt2_ratios_{cde_run_dte}.png')
+plot_correction_ratios(gpcp_v3pt2_ant_monthly_clim, vmin=0, vmax=1.5,)
+svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt2_monthly_clim_{cde_run_dte}.png')
+plt.savefig(svnme, dpi=500)
+gc.collect()
+
+# Calculate monthly climatology from IMERG v7 data
+imerg_v7_monthly_clim = imerg_v7_data.groupby('time.month').mean(dim='time').compute()
+
+# Subset the data over Antarctica
+imerg_v7_ant_monthly_clim = imerg_v7_monthly_clim.isel(lat=slice(-60, None)).where(new_mask_ == 1)
+
+# Plot the monthly climatology data
+plot_correction_ratios(imerg_v7_ant_monthly_clim, vmin=0, vmax=0.05,product_name='IMERG')
+svnme = os.path.join(path_to_put_plots, f'IMERG_v7_monthly_clim_{cde_run_dte}.png')
 plt.savefig(svnme, dpi=500)
 gc.collect()
 
@@ -120,7 +144,7 @@ gpcp_v3pt3_ratios = gpcp_v3pt3_ratios.assign_coords(month=list(range(1, 13)))
 gpcp_v3pt3_ratios.to_netcdf(os.path.join(path_to_put_ratio_maps, f'gpcp_v3pt3_ratios_{cde_run_dte}.nc'))
 
 # Plot the correction ratios for GPCP v3.3 data
-
+print("Plotting correction ratios for GPCP v3.3 data...")
 svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt3_ratios_{cde_run_dte}.png')
 plot_correction_ratios(gpcp_v3pt3_ratios)
 plt.savefig(svnme, dpi=500)
@@ -151,10 +175,42 @@ gpcp_v3pt2_ratios = xr.concat(
 gpcp_v3pt2_ratios = gpcp_v3pt2_ratios.assign_coords(month=list(range(1, 13)))
 # save the correction ratios to a netCDF file
 gpcp_v3pt2_ratios.to_netcdf(os.path.join(path_to_put_ratio_maps, f'gpcp_v3pt2_ratios_{cde_run_dte}.nc'))
-
+print("Plotting correction ratios for GPCP v3.2 data...")
 # Plot the correction ratios for GPCP v3.2 data
 svnme = os.path.join(path_to_put_plots, f'GPCP_v3pt2_ratios_{cde_run_dte}.png')
 plot_correction_ratios(gpcp_v3pt2_ratios)
+plt.savefig(svnme, dpi=500)
+gc.collect()
+
+# Compute correction ratios for IMERG v7 data
+# imerg_v7_ratios = compute_monthly_ratios(cs_ant_month_clim_aligned, imerg_v7_ant_monthly_clim)
+imerg_v7_ratios = xr.concat(
+    [
+        xr.DataArray(
+            cf_calculator(
+                cs_ant_month_clim_aligned.sel(month=month).values,
+                imerg_v7_ant_monthly_clim.sel(month=month).values,
+                new_mask_,
+            ),
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": imerg_v7_ant_monthly_clim.lat.values,
+                "longitude": imerg_v7_ant_monthly_clim.lon.values,
+                "month": month,
+            },
+        )
+        for month in range(1, 13)
+    ],
+    dim="month",
+)
+imerg_v7_ratios = imerg_v7_ratios.assign_coords(month=list(range(1, 13)))
+# save the correction ratios to a netCDF file
+imerg_v7_ratios.to_netcdf(os.path.join(path_to_put_ratio_maps, f'imerg_v7_ratios_{cde_run_dte}.nc'))
+print("Plotting correction ratios for IMERG v7 data...")
+# Plot the correction ratios for IMERG v7 data
+svnme = os.path.join(path_to_put_plots, f'IMERG_v7_ratios_{cde_run_dte}.png')
+# mn,mx = imerg_v7_ratios.min().item(), imerg_v7_ratios.max().item()
+plot_correction_ratios(imerg_v7_ratios, product_name='IMERG')
 plt.savefig(svnme, dpi=500)
 gc.collect()
 
@@ -182,8 +238,18 @@ gpcp_v3pt2_zonal_weighted = [
     for month in range(1, 13)
 ]
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+imerg_v7_zonal_weighted = [
+    get_zonal(
+        imerg_v7_ant_monthly_clim.sel(month=month), 
+        new_mask_, 
+        imerg_v7_ant_monthly_clim.lat.values, 
+        axis=(0, 1)
+    ) 
+    for month in range(1, 13)
+]
 
-cs_ant_zon = [
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+cs_ant_zonal_weighted = [
     get_zonal(
         cs_ant_month_clim_aligned.sel(month=month), 
         new_mask_, 
@@ -237,6 +303,32 @@ mpl.rcParams['xtick.labelsize'] = 18
 mpl.rcParams['ytick.labelsize'] = 18
 mpl.rcParams['axes.titlesize'] = 18
 mpl.rcParams['axes.labelsize'] = 18
+
+# Create the bar plot with updated styles
+width = 0.4  # Width of each bar
+x = np.arange(1, 13)  # Month indices
+plt.figure(figsize=(10, 6))
+plt.bar(x - width / 2, gpcp_v3pt3_crfs_arr_single['crf'], width, label='GPCP v3.3', color='skyblue')
+plt.bar(x + width / 2, gpcp_v3pt2_crfs_arr_single['crf'], width, label='GPCP v3.2', color='orange')
+
+plt.xticks(gpcp_v3pt3_crfs_arr_single['month'], 
+           ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], 
+           fontsize=18, fontweight='bold', family='Times New Roman')
+plt.xlabel('Month', fontsize=18, fontweight='bold', family='Times New Roman')
+plt.ylabel('Correction Ratio', fontsize=18, fontweight='bold', family='Times New Roman')
+plt.title('Single Value Correction Ratios', fontsize=18, fontweight='bold', family='Times New Roman')
+plt.grid(axis='y', ls='--', lw=0.5, c='gray', alpha=0.5)
+plt.tight_layout()
+
+# Add grid and legend
+# plt.grid(axis='y')
+plt.legend(fontsize=16, loc='upper right', frameon=False)
+plt.tight_layout()
+
+
+# Save the plot
+plt.savefig(os.path.join(path_to_put_plots, f'GPCP_ratios_single_{cde_run_dte}.png'), dpi=300)
+plt.show()
 
 #%%
 

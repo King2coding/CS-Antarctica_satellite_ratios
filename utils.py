@@ -7,6 +7,8 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+from rasterio.warp import Resampling
+from pyproj import CRS
 from scipy.io import loadmat
 from datetime import date
 import numpy as np
@@ -18,11 +20,6 @@ import matplotlib as mpl
 from scipy.ndimage import gaussian_filter
 from scipy.signal import convolve2d
 
-#%%
-# global variables
-
-
-#%%
 #%% Floating variables
 
 mask_path = "/ra1/pubdat/mask_land_ocean/mask50km.mat"
@@ -37,6 +34,10 @@ new_mask_ = new_mask.astype(int)
 
 cde_run_dte = str(date.today().strftime('%Y%m%d'))
 
+imerg_no_data_flag = -9999.9
+
+img_elem = ['precipitation','lat','lon']
+
 #%% Define functions
 def ds_swaplon(ds):
     """Swap longitude coordinates from [0,360] to [-180,180] and rename lat/lon."""
@@ -49,7 +50,7 @@ def ds_swaplon(ds):
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # plot the correction ratios
-def plot_correction_ratios(crfs_arr, vmin=None, vmax=None):
+def plot_correction_ratios(crfs_arr, vmin=None, vmax=None, product_name=None):
     """
     Plots the correction ratios for each month in a 3x4 grid.
 
@@ -104,8 +105,8 @@ def plot_correction_ratios(crfs_arr, vmin=None, vmax=None):
         gl.right_labels = False
         gl.bottom_labels = True
         gl.left_labels = True
-        gl.xlabel_style = {'fontsize': 12, 'fontweight': 'normal'}
-        gl.ylabel_style = {'fontsize': 12, 'fontweight': 'normal'}
+        gl.xlabel_style = {'fontsize': 16, 'fontweight': 'bold'}
+        gl.ylabel_style = {'fontsize': 16, 'fontweight': 'bold'}
         gl.xpadding = 10
         gl.ypadding = 10
 
@@ -122,7 +123,10 @@ def plot_correction_ratios(crfs_arr, vmin=None, vmax=None):
     # Round colorbar tick labels to 1 decimal place
     ticks = cbar.get_ticks()
     cbar.ax.set_xticks(ticks)
-    cbar.ax.set_xticklabels([f"{tick:.1f}" for tick in ticks])
+    if product_name == 'IMERG':
+        cbar.ax.set_xticklabels([f"{tick:.3f}" for tick in ticks])
+    else:
+        cbar.ax.set_xticklabels([f"{tick:.1f}" for tick in ticks])
 
     # Adjust layout
     plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space for the colorbar
@@ -188,4 +192,154 @@ def get_zonal(spatial_product, mask, y, axis=(0, 1)):
     return np.nansum(weights * spatial_product, axis=axis)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def create_xarray(all_precip, all_time_index, lon, lat, attrs=None):
+    """
+    Create an xarray DataArray from the list of 2D precipitation arrays and add attributes.
 
+    Parameters:
+    - all_precip: List or array of 2D precipitation arrays
+    - all_time_index: List of timestamps
+    - lon: Array of longitudes
+    - lat: Array of latitudes
+    - attrs: Dictionary of attributes to add to the DataArray (optional)
+
+    Returns:
+    - precip_data: xarray DataArray with the specified attributes
+    """
+    # Create a pandas DatetimeIndex from the list of timestamps
+    time_index = pd.to_datetime(all_time_index)
+    
+    # Create an xarray DataArray from the list of 2D precipitation arrays
+    precip_data = xr.DataArray(
+        data=all_precip,
+        dims=["time", "lat", "lon"],
+        coords={
+            "time": time_index,
+            "lat": lat,
+            "lon": lon
+        }
+    )
+
+    # Add attributes if provided
+    if attrs:
+        precip_data.attrs.update(attrs)
+    
+    return precip_data
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def return_imerg_cords(file):
+    file_dat = xr.open_dataset(file)
+    lon = file_dat.coords['lon'].values
+    lat = np.flip(file_dat.coords['lat']).values
+
+    del(file_dat)
+
+    return lon, lat
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def read_nc_imger_file(file_path, product):
+    imerg_precip_data = xr.open_dataset(file_path)
+    if product == 'imerg_fn':
+        precip_aray = imerg_precip_data.precipitation.data 
+    elif product == 'imerg_mw':
+        precip_aray = imerg_precip_data.MWprecipitation.data 
+    precip_aray = np.flip(precip_aray[0,:,:].transpose(), axis=0)
+    imerg_time = imerg_precip_data.attrs['BeginDate']
+    imerg_precip_data.close()
+    
+    # Convert time to pandas datetime
+    imerg_time_index = pd.to_datetime(imerg_time,format='%Y-%m-%d')
+
+    del(imerg_precip_data,imerg_time)
+    
+    return precip_aray, imerg_time_index
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def process_imerg(files,product):
+    img_lon,img_lat = return_imerg_cords(files[0])
+
+    all_imfn_prcp, all_imfn_tms = [], []
+
+    for imf in files:
+        imerg_fn = read_nc_imger_file(imf,product)
+        
+        all_imfn_prcp.append(imerg_fn[0])
+        all_imfn_tms.append(imerg_fn[1])
+
+    # Ensure data is sorted by time
+    sorted_indices = np.argsort(np.array(all_imfn_tms))
+    all_imfn_prcp = np.array(all_imfn_prcp)[sorted_indices]
+    all_imfn_tms = np.array(all_imfn_tms)[sorted_indices]
+
+    # Process the files to aggregate data
+    imerg_xarr_data = create_xarray(all_imfn_prcp,all_imfn_tms,img_lon,img_lat)
+
+    # Resample to monthly and calculate the sum
+    # imerg_monthly_precip = imerg_xarr_data.resample(time="M").mean()
+
+    return imerg_xarr_data
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def read_hdf_precip_data(file, extract_dims, no_data_flag):
+
+    import h5py
+
+    file_time = [x for x in os.path.split(file)[1].split('.') if x.startswith('20')][0].split('-')[0]
+
+    file_time_index = pd.to_datetime(file_time)
+
+    with h5py.File(file, 'r') as hdf:
+
+        # Extracting the 'precipitation' dataset as an array and orienting it to lat/lon (y,x axis)
+        if len(hdf['Grid'][extract_dims[0]][()].shape) == 3:
+            precipitation_data_array = np.flip(hdf['Grid'][extract_dims[0]][0][()][:,:].transpose(), axis=0) #precipitation_dataset[()][0, :, :]
+        elif len(hdf['Grid'][extract_dims[0]][()].shape) == 2:
+            precipitation_data_array = np.flip(hdf['Grid'][extract_dims[0]][()][:,:].transpose(), axis=0)
+
+        # Handling no data flag
+        precipitation_data_array = np.where(precipitation_data_array == no_data_flag,
+                                            np.nan,precipitation_data_array)        
+
+        # Extract the latitude and longitude datasets
+        latitudes = np.flip(hdf['Grid'][extract_dims[1]][:])
+        longitudes = hdf['Grid'][extract_dims[2]][:]
+
+        return precipitation_data_array, latitudes, longitudes, file_time_index
+    
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+def process_precip_dat(files,dims, resample):
+    
+
+    all_prcp_data, all_tms = [], []
+
+    for f in files:
+        precip_data = read_hdf_precip_data(f,dims,imerg_no_data_flag)
+        
+        all_prcp_data.append(precip_data[0])
+        all_tms.append(precip_data[3])
+
+    dat_lat, dat_lon = precip_data[1], precip_data[2]
+
+    # Ensure data is sorted by time
+    sorted_indices = np.argsort(np.array(all_tms))
+    all_prcp_data = np.array(all_prcp_data)[sorted_indices]
+    all_tms = np.array(all_tms)[sorted_indices]
+
+    # Process the files to aggregate data
+    precip_data_xarr = create_xarray(all_prcp_data,all_tms,dat_lon,dat_lat)  
+
+    if resample == 'yes':
+        cc = CRS.from_authority(code=4326,auth_name='EPSG')
+
+        precip_data_xarr.rio.write_crs(cc.to_string(), inplace=True)
+
+        precip_data_xarr = precip_data_xarr.rename({'lon': 'x', 'lat': 'y'})
+
+        precip_data_xarr = precip_data_xarr.rio.reproject(precip_data_xarr.rio.crs, 
+                                shape=(360, 720), # set the shape as the autosnow data shape (360, 720)
+                                resampling=Resampling.nearest,) 
+        
+        precip_data_xarr = precip_data_xarr.rename({'x': 'lon', 'y': 'lat'})
+
+    return precip_data_xarr
+
+# %%
