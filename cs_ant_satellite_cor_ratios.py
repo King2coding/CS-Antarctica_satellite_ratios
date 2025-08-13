@@ -65,13 +65,15 @@ gpcp_v3pt3_monthly_clim = gpcp_v3pt3_data['sat_gauge_precip'].groupby('time.mont
 gpcp_v3pt3_ant_monthly_clim = gpcp_v3pt3_monthly_clim.isel(latitude=slice(-60, None)).where(new_mask_ == 1)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-cs_ant_month_clim_aligned = cs_ant_month_clim.rename({'time': 'month'})
+cs_ant_month_clim_aligned = cs_ant_month_clim.rename({'time': 'month',
+                                                      'lat': 'latitude',
+                                                      'lon': 'longitude'})
 
 # Ensure latitude and longitude dimensions match
-cs_ant_month_clim_aligned = cs_ant_month_clim_aligned.interp(
-    lat=gpcp_v3pt3_ant_monthly_clim.latitude, 
-    lon=gpcp_v3pt3_ant_monthly_clim.longitude
-)
+cs_ant_month_clim_aligned = cs_ant_month_clim_aligned.drop(['lat', 'lon'], errors='ignore').interp(
+    latitude=gpcp_v3pt3_ant_monthly_clim.latitude, 
+    longitude=gpcp_v3pt3_ant_monthly_clim.longitude
+).squeeze()
 
 # plot and save the monthly climatology data
 
@@ -106,7 +108,7 @@ imerg_v7_monthly_clim = imerg_v7_data.groupby('time.month').mean(dim='time').com
 imerg_v7_ant_monthly_clim = imerg_v7_monthly_clim.isel(lat=slice(-60, None)).where(new_mask_ == 1)
 
 # Plot the monthly climatology data
-plot_correction_ratios(imerg_v7_ant_monthly_clim, vmin=0, vmax=0.05,product_name='IMERG')
+plot_correction_ratios(imerg_v7_ant_monthly_clim, vmin=0, vmax=0.009, product_name='IMERG')
 svnme = os.path.join(path_to_put_plots, f'IMERG_v7_monthly_clim_{cde_run_dte}.png')
 plt.savefig(svnme, dpi=500)
 gc.collect()
@@ -210,54 +212,86 @@ print("Plotting correction ratios for IMERG v7 data...")
 # Plot the correction ratios for IMERG v7 data
 svnme = os.path.join(path_to_put_plots, f'IMERG_v7_ratios_{cde_run_dte}.png')
 # mn,mx = imerg_v7_ratios.min().item(), imerg_v7_ratios.max().item()
-plot_correction_ratios(imerg_v7_ratios, product_name='IMERG')
+plot_correction_ratios(imerg_v7_ratios, vmin = 10, vmax=2000, product_name='IMERG')
 plt.savefig(svnme, dpi=500)
 gc.collect()
 
 # %% calculate single value correction ratios
 # Calculate single value correction ratios and store them in a DataFrame
 # First we need to Apply zonal cosine weights to each of the 12 monthly maps
-gpcp_v3pt3_zonal_weighted = [
-    get_zonal(
-        gpcp_v3pt3_ant_monthly_clim.sel(month=month), 
-        new_mask_, 
-        gpcp_v3pt3_ant_monthly_clim.latitude.values, 
-        axis=(0, 1)
-    ) 
-    for month in range(1, 13)
-]
+gpcp_v3pt3_zonal_weighted = xr.concat(
+    [
+        xr.DataArray(
+            get_zonal(
+                gpcp_v3pt3_ant_monthly_clim.sel(month=month), 
+                new_mask_, 
+                gpcp_v3pt3_ant_monthly_clim.latitude.values, 
+                axis=(0, 1)
+            ),
+            dims=["latitude"],
+            coords={"latitude": gpcp_v3pt3_ant_monthly_clim.latitude, "month": month},
+        )
+        for month in range(1, 13)
+    ],
+    dim="month",
+)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-gpcp_v3pt2_zonal_weighted = [
-    get_zonal(
-        gpcp_v3pt2_ant_monthly_clim.sel(month=month), 
-        new_mask_, 
-        gpcp_v3pt2_ant_monthly_clim.latitude.values, 
-        axis=(0, 1)
-    ) 
-    for month in range(1, 13)
-]
+# Compute zonal weighted data for GPCP v3.2
+gpcp_v3pt2_zonal_weighted = xr.concat(
+    [
+        xr.DataArray(
+            get_zonal(
+                gpcp_v3pt2_ant_monthly_clim.sel(month=month), 
+                new_mask_, 
+                gpcp_v3pt2_ant_monthly_clim.latitude.values, 
+                axis=(0, 1)
+            ),
+            dims=["latitude"],
+            coords={"latitude": gpcp_v3pt2_ant_monthly_clim.latitude, "month": month},
+        )
+        for month in range(1, 13)
+    ],
+    dim="month",
+)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-imerg_v7_zonal_weighted = [
-    get_zonal(
-        imerg_v7_ant_monthly_clim.sel(month=month), 
-        new_mask_, 
-        imerg_v7_ant_monthly_clim.lat.values, 
-        axis=(0, 1)
-    ) 
-    for month in range(1, 13)
-]
 
+# Compute zonal weighted data for IMERG v7
+imerg_v7_zonal_weighted = xr.concat(
+    [
+        xr.DataArray(
+            get_zonal(
+                imerg_v7_ant_monthly_clim.sel(month=month), 
+                new_mask_, 
+                imerg_v7_ant_monthly_clim.lat.values, 
+                axis=(0, 1)
+            ),
+            dims=["lat"],
+            coords={"lat": imerg_v7_ant_monthly_clim.lat, "month": month},
+        )
+        for month in range(1, 13)
+    ],
+    dim="month",
+)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-cs_ant_zonal_weighted = [
-    get_zonal(
-        cs_ant_month_clim_aligned.sel(month=month), 
-        new_mask_, 
-        cs_ant_month_clim_aligned.latitude.values, 
-        axis=(0, 1)
-    ) 
-    for month in range(1, 13)
-]
+
+# Compute zonal weighted data for CloudSat Antarctica
+cs_ant_zonal_weighted = xr.concat(
+    [
+        xr.DataArray(
+            get_zonal(
+                cs_ant_month_clim_aligned.sel(month=month), 
+                new_mask_, 
+                cs_ant_month_clim_aligned.latitude.values, 
+                axis=(0, 1)
+            ),
+            dims=["latitude"],
+            coords={"latitude": cs_ant_month_clim_aligned.latitude, "month": month},
+        )
+        for month in range(1, 13)
+    ],
+    dim="month",
+)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # now compute the single value correction ratios and convert to DataFrame
@@ -265,8 +299,8 @@ cs_ant_zonal_weighted = [
 gpcp_v3pt3_crfs_arr_single = [
     {
         'month': month,
-        'crf': (cs_ant_month_clim_aligned.sel(month=month).mean().item() /
-                gpcp_v3pt3_ant_monthly_clim.sel(month=month).mean().item())
+        'crf': (cs_ant_zonal_weighted.sel(month=month).mean().item() /
+                gpcp_v3pt3_zonal_weighted.sel(month=month).mean().item())
     }
     for month in range(1, 13)
 ]
@@ -280,8 +314,8 @@ gpcp_v3pt3_crfs_arr_single.to_csv(os.path.join(path_to_put_ratio_dfs, f'gpcp_v3p
 gpcp_v3pt2_crfs_arr_single = [
     {
         'month': month,
-        'crf': (cs_ant_month_clim_aligned.sel(month=month).mean().item() /
-                gpcp_v3pt2_ant_monthly_clim.sel(month=month).mean().item())
+        'crf': (cs_ant_zonal_weighted.sel(month=month).mean().item() /
+                gpcp_v3pt2_zonal_weighted.sel(month=month).mean().item())
     }
     for month in range(1, 13)
 ]
@@ -290,6 +324,29 @@ gpcp_v3pt2_crfs_arr_single = [
 gpcp_v3pt2_crfs_arr_single = pd.DataFrame(gpcp_v3pt2_crfs_arr_single)
 # save the single value correction ratios to a csv file
 gpcp_v3pt2_crfs_arr_single.to_csv(os.path.join(path_to_put_ratio_dfs, f'gpcp_v3pt2_crfs_{cde_run_dte}.csv'), index=False)
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+imerg_v7_crfs_arr_single = [
+    {
+        'month': month,
+        'crf': (cs_ant_zonal_weighted.sel(month=month).mean().item() /
+                imerg_v7_zonal_weighted.sel(month=month).mean().item())
+    }
+    for month in range(1, 13)
+]
+# Convert the list of dictionaries to a DataFrame
+imerg_v7_crfs_arr_single = pd.DataFrame(imerg_v7_crfs_arr_single)
+# save the single value correction ratios to a csv file
+imerg_v7_crfs_arr_single.to_csv(os.path.join(path_to_put_ratio_dfs, f'imerg_v7_crfs_{cde_run_dte}.csv'), index=False)
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# E compute AIRS CS ratios as GPCP ratios * 1.4
+airs_cs_crfs_arr_single = gpcp_v3pt3_crfs_arr_single.copy()
+airs_cs_crfs_arr_single['crf'] = airs_cs_crfs_arr_single['crf'] * 1.4
+
+# save the single value correction ratios to a csv file
+airs_cs_crfs_arr_single.to_csv(os.path.join(path_to_put_ratio_dfs, f'airs_cs_crfs_{cde_run_dte}.csv'), index=False)
 
 #%% Do bar plot comparion of the single value correction ratios for diff products
 
@@ -308,12 +365,18 @@ mpl.rcParams['axes.labelsize'] = 18
 width = 0.4  # Width of each bar
 x = np.arange(1, 13)  # Month indices
 plt.figure(figsize=(10, 6))
-plt.bar(x - width / 2, gpcp_v3pt3_crfs_arr_single['crf'], width, label='GPCP v3.3', color='skyblue')
-plt.bar(x + width / 2, gpcp_v3pt2_crfs_arr_single['crf'], width, label='GPCP v3.2', color='orange')
+# plt.bar(x - width / 2, gpcp_v3pt3_crfs_arr_single['crf'], width, label='GPCP v3.3', color='skyblue')
+# plt.bar(x + width / 2, gpcp_v3pt2_crfs_arr_single['crf'], width, label='GPCP v3.2', color='orange')
+
+plt.bar(x - width / 2, gpcp_v3pt3_crfs_arr_single['crf']*1.4, width, label='GPCP v3.3', color='skyblue')
+plt.bar(x + width / 2, gpcp_v3pt2_crfs_arr_single['crf']*1.4, width, label='GPCP v3.2', color='orange')
+
 
 plt.xticks(gpcp_v3pt3_crfs_arr_single['month'], 
            ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], 
            fontsize=18, fontweight='bold', family='Times New Roman')
+# plt.ylim(0, 1.2)  # Adjust y-axis scale to match the previous plots
+
 plt.xlabel('Month', fontsize=18, fontweight='bold', family='Times New Roman')
 plt.ylabel('Correction Ratio', fontsize=18, fontweight='bold', family='Times New Roman')
 plt.title('Single Value Correction Ratios', fontsize=18, fontweight='bold', family='Times New Roman')
@@ -322,7 +385,7 @@ plt.tight_layout()
 
 # Add grid and legend
 # plt.grid(axis='y')
-plt.legend(fontsize=16, loc='upper right', frameon=False)
+plt.legend(fontsize=16, loc='best', frameon=False)
 plt.tight_layout()
 
 
@@ -330,10 +393,92 @@ plt.tight_layout()
 plt.savefig(os.path.join(path_to_put_plots, f'GPCP_ratios_single_{cde_run_dte}.png'), dpi=300)
 plt.show()
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# make a similar plot for a single zonal correction ratio
+mpl.rcParams['font.family'] = 'serif'
+mpl.rcParams['font.serif'] = ['Times New Roman']
+mpl.rcParams['font.weight'] = 'bold'
+mpl.rcParams['axes.labelweight'] = 'bold'
+mpl.rcParams['axes.titleweight'] = 'bold'
+mpl.rcParams['xtick.labelsize'] = 18
+mpl.rcParams['ytick.labelsize'] = 18
+mpl.rcParams['axes.titlesize'] = 18
+mpl.rcParams['axes.labelsize'] = 18
+
+# Create the bar plot with updated styles
+plt.figure(figsize=(10, 6))
+plt.bar(imerg_v7_crfs_arr_single['month'], imerg_v7_crfs_arr_single['crf'], color='skyblue')
+plt.xticks(imerg_v7_crfs_arr_single['month'], 
+           ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], 
+           fontsize=18, fontweight='bold', family='Times New Roman')
+plt.xlabel('Month', fontsize=18, fontweight='bold', family='Times New Roman')
+plt.ylabel('Correction Ratio', fontsize=18, fontweight='bold', family='Times New Roman')
+plt.title('Single Value Correction Ratios for IMERG', fontsize=18, fontweight='bold', family='Times New Roman')
+plt.ylim(100, 650)  # Adjust y-axis scale to match the previous plots
+plt.grid(axis='y')
+plt.tight_layout()
+
+# Save the plot
+plt.savefig(os.path.join(path_to_put_plots, f'IMERG_ratios_single_zon_{cde_run_dte}.png'), dpi=300)
+plt.show()
+
 #%%
+# lets compute and compare zonal means to 
 
+#%%
+# Compute zonal means for CloudSat Antarctica climatology data
+# Compute zonal means for CloudSat Antarctica climatology data
+cs_ant_month_clim_zonal = cs_ant_month_clim_aligned.groupby('latitude').mean(dim=['month', 'longitude'], skipna=True).to_dataframe(name='mean_value').reset_index()
 
+# Compute zonal means for GPCP v3.3 data
+gpcp_v3pt3_monthly_clim_zonal = gpcp_v3pt3_ant_monthly_clim.groupby('latitude').mean(dim=['month', 'longitude'], skipna=True).to_dataframe(name='mean_value').reset_index()
 
+# Compute zonal means for GPCP v3.2 data
+gpcp_v3pt2_monthly_clim_zonal = gpcp_v3pt2_ant_monthly_clim.groupby('latitude').mean(dim=['month', 'longitude'], skipna=True).to_dataframe(name='mean_value').reset_index()
+
+# Compute zonal means for IMERG v7 data
+imerg_v7_monthly_clim_zonal = imerg_v7_ant_monthly_clim.groupby('lat').mean(dim=['month', 'lon'], skipna=True).to_dataframe(name='mean_value').reset_index()
+
+# plot the zonal means to compare products
+# place lat in the y axis and mean values on x axis
+mpl.rcParams['font.family'] = 'serif'
+mpl.rcParams['font.serif'] = ['Times New Roman']
+mpl.rcParams['font.weight'] = 'bold'
+mpl.rcParams['axes.labelweight'] = 'bold'
+mpl.rcParams['axes.titleweight'] = 'bold'
+mpl.rcParams['xtick.labelsize'] = 18
+mpl.rcParams['ytick.labelsize'] = 18
+mpl.rcParams['axes.titlesize'] = 18
+mpl.rcParams['axes.labelsize'] = 18
+
+plt.figure(figsize=(10, 6))
+plt.plot(cs_ant_month_clim_zonal.query('latitude <= -68')['mean_value'], 
+         cs_ant_month_clim_zonal.query('latitude <= -68')['latitude'], 
+         label='CloudSat Antarctica')
+plt.plot(gpcp_v3pt3_monthly_clim_zonal.query('latitude <= -68')['mean_value'], 
+         gpcp_v3pt3_monthly_clim_zonal.query('latitude <= -68')['latitude'], 
+         label='GPCP v3.3')
+plt.plot(gpcp_v3pt2_monthly_clim_zonal.query('latitude <= -68')['mean_value'], 
+         gpcp_v3pt2_monthly_clim_zonal.query('latitude <= -68')['latitude'], 
+         label='GPCP v3.2')
+plt.plot(imerg_v7_monthly_clim_zonal.query('lat <= -68')['mean_value'], 
+         imerg_v7_monthly_clim_zonal.query('lat <= -68')['lat'], 
+         label='IMERG v7')
+plt.xlabel('Latitude', fontsize=18, fontweight='bold')
+plt.ylabel('Mean Value', fontsize=18, fontweight='bold')
+plt.title('Zonal Means for CloudSat Antarctica, GPCP v3.3,\n GPCP v3.2, and IMERG v7', fontsize=18, fontweight='bold')
+plt.xticks(fontsize=18, fontweight='bold')
+plt.yticks(fontsize=18, fontweight='bold')
+plt.grid(which='major', axis='both', ls='--', lw=0.5, c='gray', alpha=0.5)
+plt.legend(frameon=False, fontsize=18)
+
+plt.tight_layout()
+
+# Save the plot
+plt.savefig(os.path.join(path_to_put_plots, f'zonal_means_comparison_{cde_run_dte}.png'), 
+            dpi=300, bbox_inches='tight')
+plt.show()
+#%%
 # Convert the list of dictionaries to a DataFrame
 crfs_arr_single_zon = pd.DataFrame(crfs_arr_single_zon)
 

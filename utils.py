@@ -124,7 +124,7 @@ def plot_correction_ratios(crfs_arr, vmin=None, vmax=None, product_name=None):
     ticks = cbar.get_ticks()
     cbar.ax.set_xticks(ticks)
     if product_name == 'IMERG':
-        cbar.ax.set_xticklabels([f"{tick:.3f}" for tick in ticks])
+        cbar.ax.set_xticklabels([f"{tick:.4f}" for tick in ticks])
     else:
         cbar.ax.set_xticklabels([f"{tick:.1f}" for tick in ticks])
 
