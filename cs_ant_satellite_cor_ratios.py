@@ -638,3 +638,104 @@ summarize reza mthods into bulltet points:
 - The method is designed to improve the accuracy of GPCP precipitation products over Antarctica by adjusting for biases.
 
 '''
+
+#%%
+# miscellaneous
+misc_path = r'/ra1/pubdat/AVHRR_CloudSat_proj/CS_Antartica_analysis_kkk/CS-Antarctica_maps'
+
+era5_monthly_adjust = os.path.join(misc_path, 'ERA5_adjusted_monthly_climatology.nc')
+
+era5_corrected = xr.open_dataarray(era5_monthly_adjust)
+era5_corrected = era5_corrected.rename({'time': 'month'})
+era5_corrected = era5_corrected.where(new_mask_ == 1)
+plot_correction_ratios(era5_corrected, vmin=0, vmax=2)
+
+era5_seasonal_adjust = os.path.join(misc_path, 'ERA5_adjusted_seasonal_climatology.nc')
+
+era5_corrected_seasonal = xr.open_dataarray(era5_seasonal_adjust)
+era5_corrected_seasonal = era5_corrected_seasonal.rename({'time': 'season'})
+
+era5_corrected_seasonal = era5_corrected_seasonal.where(new_mask_ == 1)
+def plot_seasonal_correction_ratios(crfs_arr, vmin=None, vmax=None, product_name=None):
+    """
+    Plots the correction ratios for each season in a 2x2 grid.
+
+    Parameters:
+    crfs_arr (xarray.DataArray): Correction ratios with dimensions (season, latitude, longitude).
+    """
+    proj = ccrs.SouthPolarStereo()
+
+    # Define the custom colormap
+    mpl_cm = plt.cm.get_cmap("nipy_spectral", 21)
+    ncolors = mpl_cm(np.linspace(0, 1, 21))[:20]
+    ncolors[0] = [128 / 256, 100 / 256, 128 / 256, 1]
+    ncolors[2] = ncolors[1].copy()
+    ncolors[1] = [0.7, 0.1, 0.7, 1]
+    newcmap = ListedColormap(ncolors)
+
+    # Set discrete color levels
+    vmin, vmax = vmin or 0, vmax or 8
+    levels = np.linspace(vmin, vmax, len(ncolors))
+    norm = BoundaryNorm(levels, newcmap.N)
+
+    # Create a GridSpec for better control over the layout
+    fig = plt.figure(figsize=(15, 10))
+    gs = gridspec.GridSpec(2, 2, figure=fig, wspace=0.025, hspace=0.2)
+
+    # Southern Hemisphere seasons
+    season_names = ["DJF", "MAM", "JJA", "SON"]
+    axes = []
+
+    for season in range(1, 5):
+        ax = fig.add_subplot(gs[season - 1], projection=proj)
+        ax.set_extent([-180, 180, -90, -65], ccrs.PlateCarree())
+        ax.coastlines(lw=0.25, resolution="110m", zorder=2)
+
+        # Plot the correction ratio for the current season
+        crf = crfs_arr.sel(season=season)
+        crf.plot(ax=ax, transform=ccrs.PlateCarree(), 
+                 vmin=vmin, vmax=vmax, cmap=newcmap, norm=norm, add_colorbar=False, add_labels=False)
+
+        ax.add_feature(cfeature.OCEAN, zorder=1, edgecolor=None, lw=0, color="silver", alpha=0.5)
+
+        # Place season title in upper right corner of each subplot for better readability
+        ax.text(0.95, 0.95, season_names[season - 1], 
+                transform=ax.transAxes, 
+                fontsize=16, fontweight='bold',
+                ha='right', va='top',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='none'))
+
+        # Add gridlines with improved positioning
+        gl = ax.gridlines(draw_labels=True, x_inline=False, y_inline=False, 
+                          linestyle='--', color='k', linewidth=0.75)
+        gl.top_labels = False
+        gl.right_labels = False
+        gl.bottom_labels = True
+        gl.left_labels = True
+        gl.xlabel_style = {'fontsize': 16, 'fontweight': 'bold'}
+        gl.ylabel_style = {'fontsize': 16, 'fontweight': 'bold'}
+        gl.xpadding = 10
+        gl.ypadding = 10
+
+        axes.append(ax)
+
+    # Add a dedicated axis for the colorbar (move outside the loop)
+    cbar_ax = fig.add_axes([0.15, 0.05, 0.7, 0.02])  # [left, bottom, width, height]
+    cbar = fig.colorbar(
+        ScalarMappable(norm=norm, cmap=newcmap),
+        cax=cbar_ax, orientation='horizontal', extend='max'
+    )
+    cbar.ax.tick_params(labelsize=16, labelrotation=0, width=1, length=5, direction='out')
+
+    # Round colorbar tick labels to 1 decimal place
+    ticks = cbar.get_ticks()
+    cbar.ax.set_xticks(ticks)
+    if product_name == 'IMERG':
+        cbar.ax.set_xticklabels([f"{tick:.4f}" for tick in ticks])
+    else:
+        cbar.ax.set_xticklabels([f"{tick:.1f}" for tick in ticks])
+
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space for the colorbar
+
+plot_seasonal_correction_ratios(era5_corrected_seasonal, vmin=None, vmax=2, product_name='ERA5')
