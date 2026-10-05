@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "Please cite this code archive and any associated data products or publications relevant to your use."
+title: "CloudSat-based Antarctic precipitation correction ratios"
+type: software
+authors:
+  - family-names: "Kumah"
+    given-names: "Kwabena Kingsley"
+    orcid: "https://orcid.org/0000-0001-6865-0665"
+repository-code: "https://github.com/King2coding/CS-Antarctica_satellite_ratios"

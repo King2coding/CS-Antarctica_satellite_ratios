@@ -1,127 +1,87 @@
-# CS-Antarctica GPCP Precipitation Correction
+# CloudSat-based Antarctic precipitation correction ratios
 
-A comprehensive Python package for computing correction ratios for GPCP precipitation products over Antarctica using CloudSat-Antarctica climatology data.
+Research code for calculating monthly precipitation correction ratios over
+Antarctica using the CloudSat-Antarctica 2007–2010 climatology as a reference.
+The current workflows compare that climatology with GPCP versions 3.2 and 3.3,
+IMERG Version 7, and ERA5-derived precipitation fields.
 
-## Overview
+## Repository status
 
-This project computes correction ratios for Global Precipitation Climatology Project (GPCP) precipitation products specifically tailored for Antarctica's land regions. The correction process leverages CloudSat-Antarctica climatology data (2007-2010) to improve the accuracy of GPCP precipitation estimates over Antarctica.
+This repository preserves both the original analysis scripts and a later Python
+package scaffold. The source has not been refactored or consolidated during the
+documentation pass. The standalone research scripts remain the clearest record
+of the working analysis, while the package-style interface should be treated as
+an experimental organization layer.
 
-**Main Script**: `cs_ant_gpcp_ratios.py` - The primary working script with improved plotting functionality
+No input datasets or generated correction maps are distributed here. The
+tracked notebook is retained as part of the original code archive.
 
-## Features
+## Main analysis files
 
-- **Monthly Correction Ratios**: Generates 12 monthly correction factors as spatial maps
-- **Single Value Corrections**: Provides spatially-averaged correction ratios for each month
-- **Multiple Methods**: Implements both direct ratio calculation and Reza's smoothing method
-- **Visualization**: Creates publication-ready plots of correction ratios
-- **Antarctic Focus**: Specifically designed for Antarctic land regions using appropriate masks
+- `cs_ant_gpcp_ratios.py` calculates CloudSat-based monthly correction ratios
+  for GPCP versions 3.2 and 3.3.
+- `cs_ant_satellite_cor_ratios.py` extends the comparison to IMERG Version 7
+  and related satellite/reanalysis processing.
+- `utils.py` contains the original preprocessing, masking, correction-factor,
+  smoothing, weighting, and plotting utilities.
+- `src/antarctica_precip_correction/` contains the package-style corrector,
+  plotting, and utility modules.
+- `examples/` contains package-usage examples.
+- `Interactive-1.ipynb` is an archived interactive analysis notebook.
 
-## Key Outputs
+## Method summary
 
-1. **Spatial Correction Maps**: 12 monthly maps showing correction ratios across Antarctica
-2. **Time Series**: Monthly correction factors for temporal analysis
-3. **Comparison Plots**: Side-by-side comparison of different correction methods
+The scripts:
 
-## Methods
+1. load the CloudSat-Antarctica monthly climatology for 2007–2010;
+2. calculate corresponding monthly climatologies from comparison products;
+3. apply an Antarctic land mask and align the spatial grids;
+4. calculate spatially varying monthly correction ratios;
+5. apply the correction-factor processing implemented in `utils.py`; and
+6. write NetCDF ratio maps, tabular summaries, and diagnostic figures to
+   external output directories.
 
-### Direct Method
-- Computes simple ratios between CloudSat and GPCP climatologies
-- Applies land mask filtering for Antarctica
-- Generates monthly correction factors
+The repository documents the implemented analysis; it does not independently
+validate the scientific performance of the resulting correction factors.
 
-### Reza's Method
-- Uses quantile-based extreme value capping
-- Applies Gaussian filtering for spatial smoothing
-- Implements iterative zonal averaging for convergence
-- Caps final correction factors within defined bounds (1/3 to 3)
+## Data requirements
 
-## Data Requirements
+The workflows use externally stored CloudSat-Antarctica climatology, GPCP,
+IMERG, ERA5, and Antarctic mask data. Several scripts retain absolute paths
+from the original rain-server environment. See [`DATA.md`](DATA.md) for details.
 
-- **CloudSat-Antarctica Data**: Monthly climatology (2007-2010)
-- **GPCP Data**: Monthly precipitation data (2007-2010)
-- **Land Mask**: 50km resolution mask for Antarctica
+## Installation and execution
 
-## Installation
+The recorded Python dependencies are listed in `requirements.txt`. A typical
+environment can be prepared with:
 
 ```bash
-git clone https://github.com/yourusername/antarctica-precipitation-correction.git
-cd antarctica-precipitation-correction
-pip install -r requirements.txt
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-## Usage
+Before running a script, update its input and output path variables for your
+authorized local datasets. The original scripts are research workflows rather
+than command-line applications and may require substantial memory for multi-file
+`xarray` operations.
 
-```python
-from antarctica_precip_correction import GPCPCorrector
-
-# Initialize corrector
-corrector = GPCPCorrector(
-    cs_data_path="/path/to/cloudsat/data",
-    gpcp_data_path="/path/to/gpcp/data",
-    mask_path="/path/to/mask/data"
-)
-
-# Compute correction ratios
-correction_ratios = corrector.compute_corrections()
-
-# Generate plots
-corrector.plot_correction_ratios(correction_ratios, save_path="/path/to/plots")
-```
-
-## File Structure
-
-```
-antarctica-precipitation-correction/
-├── src/
-│   ├── antarctica_precip_correction/
-│   │   ├── __init__.py
-│   │   ├── corrector.py
-│   │   ├── plotting.py
-│   │   └── utils.py
-├── examples/
-│   ├── basic_usage.py
-│   └── advanced_analysis.ipynb
-├── tests/
-├── data/
-│   └── sample_data/
-├── plots/
-├── requirements.txt
-├── setup.py
-└── README.md
-```
-
-## Results
-
-The correction ratios reveal seasonal patterns in GPCP precipitation biases over Antarctica:
-- **Summer months** (DJF): Generally lower correction factors
-- **Winter months** (JJA): Higher correction factors indicating GPCP underestimation
-- **Spatial patterns**: Coastal regions show different correction needs than interior
+The existing `setup.py` is preserved byte-for-byte as part of the archive and
+still contains template metadata. It should not be used as authoritative author,
+repository, or command-line-interface documentation.
 
 ## Citation
 
-If you use this work, please cite:
+Repository-level citation metadata is provided in [`CITATION.cff`](CITATION.cff).
+No associated journal or manuscript citation has been assigned because the
+relationship to a specific publication has not yet been independently verified.
 
-```bibtex
-@software{antarctica_gpcp_correction,
-  title={Antarctica GPCP Precipitation Correction},
-  author={Your Name},
-  year={2025},
-  url={https://github.com/yourusername/antarctica-precipitation-correction}
-}
-```
+## License status
 
-## License
-
-MIT License - see LICENSE file for details.
+The repository contains an existing MIT license file with template authorship
+text. That file is preserved from the original history; its authorship and reuse
+status should be confirmed before relying on it.
 
 ## Contact
 
-- Author: Your Name
-- Email: your.email@domain.com
-- Institution: Your Institution
-
-## Acknowledgments
-
-- CloudSat mission for Antarctic precipitation data
-- GPCP team for global precipitation climatology
-- ERA5 reanalysis data contributors
+Kwabena Kingsley Kumah — [GitHub profile](https://github.com/King2coding)

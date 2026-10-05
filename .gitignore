@@ -135,6 +135,10 @@ data/
 *.nc
 *.nc4
 *.mat
+*.csv
+*.parquet
+*.pkl
+*.joblib
 *.png
 *.jpg
 *.pdf
